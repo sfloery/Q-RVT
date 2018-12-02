@@ -899,7 +899,7 @@ QGroupBox
      </item>
     </layout>
    </widget>
-   <widget class="QWidget" name="">
+   <widget class="QWidget" name="layoutWidget">
     <property name="geometry">
      <rect>
       <x>255</x>
@@ -1134,7 +1134,7 @@ QGroupBox
     </font>
    </property>
    <property name="accessibleDescription">
-    <string>positive_openess</string>
+    <string>positive_openness</string>
    </property>
    <property name="title">
     <string>Openess - Positive (set parameters in Sky-View Factor)</string>
@@ -1168,7 +1168,7 @@ QGroupBox
     </font>
    </property>
    <property name="accessibleDescription">
-    <string>negative_openess</string>
+    <string>negative_openness</string>
    </property>
    <property name="title">
     <string>Openess - Negative (set parameters in Sky-View Factor)</string>
@@ -1568,7 +1568,7 @@ QGroupBox
     </layout>
    </widget>
   </widget>
-  <widget class="QCheckBox" name="load_all_files">
+  <widget class="QCheckBox" name="load_files_canvas">
    <property name="enabled">
     <bool>true</bool>
    </property>

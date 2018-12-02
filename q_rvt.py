@@ -36,7 +36,6 @@ from qgis.core import QgsProject
 from .resources import *
 # Import the code for the dialog
 from .q_rvt_dialog import QRVTDialog
-import os.path
 
 def load_raster_layers(self):
 
@@ -45,8 +44,9 @@ def load_raster_layers(self):
     self.dlg.select_input_files.clear()
 
     for layer in QgsProject.instance().mapLayers().values():
+        
         # If layer is a raster and it is not a multiband type
-        if layer.type() == 1:
+        if layer.type() == 1 and layer.bandCount() == 1:
 
             layer_name = layer.name()
             layer_path = layer.dataProvider().dataSourceUri()
@@ -66,7 +66,7 @@ def check_rvt_installation(self):
     if os.path.exists(file_with_rvt_path):
         
         with open(file_with_rvt_path, "r") as rvt_file:
-            self.rvt_exe_dir = rvt_file.readline() 
+            self.rvt_exe_dir = os.path.abspath(rvt_file.readline())
             return True
 
     else:
@@ -74,12 +74,12 @@ def check_rvt_installation(self):
         #options = QFileDialog.Options()
         #options |= QFileDialog.DontUseNativeDialog
         
-        rvt_path = QFileDialog.getExistingDirectory(None,"Select RVT directory!")
+        rvt_path = os.path.abspath(QFileDialog.getExistingDirectory(None,"Select RVT directory!"))
         
         if rvt_path:
 
             with open(file_with_rvt_path, "w") as path_file:
-                path_file.write(os.path.abspath(rvt_path))
+                path_file.write(rvt_path)
 
             self.rvt_exe_dir = rvt_path
 
@@ -90,10 +90,15 @@ def do_stuff(self):
     proc_file_path = os.path.join(rvt_dir, "settings", "process_files.txt")
     settings_path = os.path.join(rvt_dir, "settings", "default_settings.txt")
 
-    with open(proc_file_path, "w") as proc_file:
-        for proc_layer in self.dlg.select_input_files.checkedItems():
+    selected_layers = []
 
-            layer_path = self.avail_raster_layers[proc_layer]
+    for proc_layer in self.dlg.select_input_files.checkedItems():
+        selected_layers.append(proc_layer)
+
+    with open(proc_file_path, "w") as proc_file:
+
+        for layer_name in selected_layers:
+            layer_path = self.avail_raster_layers[layer_name]
 
             proc_file.write("%s\n" % (layer_path))
 
@@ -158,17 +163,46 @@ def do_stuff(self):
                             settings_file.write("%s = %s\n" % (combo_desc, combo_text))
 
                 else:
-                    settings_file.write("%s 0\n\n" % (widget.accessibleDescription()))
+                    settings_file.write("%s = 0\n\n" % (widget.accessibleDescription()))
 
     rvt_exe_path = os.path.abspath(os.path.join(rvt_dir, "RVT_1.3_Win64.exe"))
-    print(rvt_exe_path)
+    
+    run_rvt_py_path = os.path.abspath(os.path.join(self.plugin_dir, "run_rvt_exe.py"))
+    print(run_rvt_py_path)
 
-    cmd = subprocess.Popen(rvt_exe_path, stdout=subprocess.PIPE, stderr=subprocess.PIPE, stdin=subprocess.PIPE, cwd=rvt_dir, shell=False)
+    python_path = os.environ['PYTHONHOME']
+    python_exe_path = os.path.join(python_path, "python.exe")
 
-    #cmd.stdin.write(b'\n')
+    cmd = [python_exe_path, run_rvt_py_path, rvt_exe_path, rvt_dir]
+    print(cmd)
 
-    cmd.terminate()
-    #print (out, err)
+    run_rvt_cmd = subprocess.Popen(cmd, stderr=subprocess.PIPE, stdout=subprocess.PIPE, shell=True)
+    run_rvt_cmd.wait()
+    cmd_out, cmd_err = run_rvt_cmd.communicate()
+
+    if run_rvt_cmd.returncode == 0:
+        pass
+    else:
+        raise ValueError(cmd_err)
+    
+    start_time_str = cmd_out.strip().decode("utf-8") 
+
+    for layer in selected_layers:
+        raster_layer_name = layer
+        raster_layer_path = self.avail_raster_layers[layer]
+        raster_layer_dir = os.path.abspath(os.path.dirname(raster_layer_path))
+
+        layer_log_name = raster_layer_name + "_process_log_" + start_time_str + ".txt"
+        layer_log_path = os.path.join(raster_layer_dir, raster_layer_name + "_process_log_" + start_time_str + ".txt")
+
+        if os.path.exists(layer_log_path):
+            log_file = open(os.path.abspath(layer_log_path), "r")
+            log_content = log_file.readlines()
+            print(log_content)
+
+        else:
+            print("Log-File coult not be loaded!")
+
 
 def activate_all_groups(self):
 
@@ -211,7 +245,7 @@ def check_module(self, module_name):
 
         #install the required module using the qgis python environment; as we don't have
         #administrator privileges we user the --user setting to install it the the user home
-        cmd_pip_module = python_path + "\\python.exe -m pip install --user %s" % module_name
+        cmd_pip_module = python_path + os.sep + "python.exe -m pip install --user %s" % module_name
         cmd = subprocess.Popen(cmd_pip_module, stdout=subprocess.PIPE, shell=True)
 
 
@@ -251,17 +285,18 @@ class QRVT:
         self.actions = []
         self.menu = self.tr(u'&Relief Visualization Toolbox')
         # TODO: We are going to let the user set this up in a future iteration
-        self.toolbar = self.iface.addToolBar(u'QRVT')
-        self.toolbar.setObjectName(u'QRVT')
+        self.toolbar = self.iface.addToolBar(u'Relief Visualization Toolbox')
+        self.toolbar.setObjectName(u'Relief Visualization Toolbox')
 
-        # #run this function if the start button is pressed
-        # self.dlg.start_button.clicked.connect(lambda: do_stuff(self))
+        self.cwd = os.getcwd()
 
-        # #close the application if the exit button is pressed
-        # self.dlg.close_button.clicked.connect(self.dlg.close)
+        #if a layer is added / removed update the available raster layers in the
+        #selection dialog
+        QgsProject.instance().layersAdded.connect(lambda: load_raster_layers(self))
+        QgsProject.instance().layersRemoved.connect(lambda: load_raster_layers(self))
 
-        # self.dlg.select_all_button.clicked.connect(lambda: activate_all_groups(self))
-        # self.dlg.select_none_button.clicked.connect(lambda: deactivate_all_groups(self))
+        check_module(self, "pywinauto")
+        check_module(self, "psutil")
 
     # noinspection PyMethodMayBeStatic
     def tr(self, message):
@@ -374,17 +409,12 @@ class QRVT:
 
     def run(self):
         """Run method that performs all the real work"""
-        
-        check_module(self, "pywinauto")
 
         #check if a file exists within the directory of the plugin which stores
         #information about where to find the rvt installation
         check_rvt_installation(self)
         
         print("Location of RVT-Installation: %s" % (self.rvt_exe_dir))
-
-        #initialize dialog
-        self.dlg = QRVTDialog()
 
         load_raster_layers(self)
 
