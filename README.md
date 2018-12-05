@@ -4,7 +4,7 @@ QGIS3 Plugin for using the Relief Visualization Toolbox from within QGIS3
 
 ### Prerequisites
 
-QGIS3.x
+QGIS3.x \n
 RVT
 
 ### Installing
