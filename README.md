@@ -1,5 +1,7 @@
+![](.docs/qrvt_img.png)
+
 # Q-RVT
-![](.docs/splash_background.tif | width=100)
+
 QGIS3 Plugin for using the Relief Visualization Toolbox from within QGIS3
 
 ### Prerequisites
